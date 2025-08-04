@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Learning Number Predictor</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      text-align: center; 
+      padding: 40px; 
+      background-color: #f4f4f4; 
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h2 { color: #2c3e50; }
+    input { 
+      width: 60px; 
+      margin: 4px; 
+      padding: 8px; 
+      text-align: center; 
+      font-size: 16px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button { 
+      margin-top: 20px; 
+      padding: 10px 20px; 
+      font-size: 16px; 
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    .result { 
+      margin-top: 20px; 
+      font-size: 1.3em; 
+      font-weight: bold; 
+      color: #333; 
+      min-height: 24px;
+    }
+    .section { 
+      margin-top: 30px; 
+      padding: 20px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #inputContainer { 
+      display: flex; 
+      justify-content: center; 
+      flex-wrap: wrap; 
+      max-width: 500px; 
+      margin: 0 auto; 
+    }
+    .data-controls { 
+      margin-top: 30px; 
+      border-top: 1px solid #ddd; 
+      padding-top: 20px; 
+    }
+    .data-controls button { 
+      margin: 8px; 
+      padding: 8px 15px; 
+      font-size: 14px; 
+    }
+    .message {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+  <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <h2>🔢 AI Number Predictor with Learning</h2>
+
+  <div class="section">
+    <p>Enter 10 numbers in sequence:</p>
+    <div id="inputContainer"></div>
+
+    <button onclick="predictNext()">🔍 Predict Next Number</button>
+    <div class="result" id="result"></div>
+  </div>
+
+  <div class="section">
+    <p>Enter the correct next number (for position 11) to teach the AI:</p>
+    <input type="number" id="actualCorrect">
+    <button onclick="learnFromExample()">📚 Learn</button>
+    <div id="learnMsg" class="message"></div>
+  </div>
+
+  <div class="data-controls">
+    <h3>Data Management</h3>
+    <button onclick="clearAllData()" style="background-color: #ff6b6b;">🧹 Clear All Training Data</button>
+    <button onclick="clearInputs()" style="background-color: #ffd166;">✏️ Clear Input Numbers</button>
+    <button onclick="exportData('json')" style="background-color: #06d6a0;">💾 Export as JSON</button>
+    <button onclick="exportData('excel')" style="background-color: #118ab2;">📊 Export as Excel</button>
+    <button onclick="importData()" style="background-color: #073b4c;">📤 Import Training Data</button>
+    <div id="dataMsg" class="message"></div>
+  </div>
+
+  <script>
+    // Initialize input fields
+    const inputContainer = document.getElementById('inputContainer');
+    for (let i = 1; i <= 10; i++) {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.id = 'n' + i;
+      input.placeholder = '#' + i;
+      inputContainer.appendChild(input);
+    }
+
+    // Get training data from localStorage
+    function getTrainingData() {
+      const data = localStorage.getItem('trainingData');
+      return data ? JSON.parse(data) : [];
+    }
+
+    // Save training data to localStorage
+    function saveTrainingData(inputs, correctOutput) {
+      const data = getTrainingData();
+      data.push({ inputs, correctOutput });
+      localStorage.setItem('trainingData', JSON.stringify(data));
+    }
+
+    // Shift numbers down and add new number at position 10
+    function shiftNumbers(newNumber) {
+      for (let i = 1; i <= 9; i++) {
+        const nextVal = document.getElementById('n' + (i + 1)).value;
+        document.getElementById('n' + i).value = nextVal;
+      }
+      document.getElementById('n10').value = newNumber;
+    }
+
+    // Predict the next number in sequence
+    function predictNext() {
+      const inputs = [];
+      for (let i = 1; i <= 10; i++) {
+        const val = parseFloat(document.getElementById('n' + i).value);
+        if (isNaN(val)) {
+          showMessage('result', '❗ Please enter all 10 numbers.', 'error');
+          return;
+        }
+        inputs.push(val);
+      }
+
+      const history = getTrainingData();
+      let prediction;
+
+      if (history.length === 0) {
+        // Linear regression for initial prediction
+        const x = [...Array(10).keys()].map(i => i + 1);
+        const y = inputs;
+        const xMean = x.reduce((a, b) => a + b) / x.length;
+        const yMean = y.reduce((a, b) => a + b) / y.length;
+        
+        let num = 0, den = 0;
+        for (let i = 0; i < 10; i++) {
+          num += (x[i] - xMean) * (y[i] - yMean);
+          den += (x[i] - xMean) ** 2;
+        }
+        
+        const slope = num / den;
+        const intercept = yMean - slope * xMean;
+        prediction = slope * 11 + intercept;
+        
+        showMessage('result', `📈 Predicted next number: ${prediction.toFixed(2)} (initial model)`);
+      } else {
+        // Use learned patterns
+        let totalDiff = 0;
+        history.forEach(entry => {
+          totalDiff += entry.correctOutput - entry.inputs[9];
+        });
+        
+        const averageDiff = totalDiff / history.length;
+        prediction = inputs[9] + averageDiff;
+        
+        showMessage('result', `🧠 Predicted next number: ${prediction.toFixed(2)} (learned from ${history.length} examples)`);
+      }
+
+      shiftNumbers(prediction.toFixed(2));
+    }
+
+    // Learn from user-provided correct answer
+    function learnFromExample() {
+      const inputs = [];
+      for (let i = 1; i <= 10; i++) {
+        const val = parseFloat(document.getElementById('n' + i).value);
+        if (isNaN(val)) {
+          showMessage('learnMsg', '❗ Please enter all 10 input numbers.', 'error');
+          return;
+        }
+        inputs.push(val);
+      }
+
+      const correct = parseFloat(document.getElementById("actualCorrect").value);
+      if (isNaN(correct)) {
+        showMessage('learnMsg', '❗ Please enter the correct number.', 'error');
+        return;
+      }
+
+      saveTrainingData(inputs, correct);
+      document.getElementById('n10').value = correct;
+      document.getElementById("actualCorrect").value = "";
+      
+      showMessage('learnMsg', '✅ Learned from your input! Position 10 updated with correct value.', 'success');
+    }
+
+    // Clear all training data
+    function clearAllData() {
+      localStorage.removeItem('trainingData');
+      showMessage('dataMsg', '✅ All training data has been cleared.', 'success');
+    }
+
+    // Clear input fields
+    function clearInputs() {
+      for (let i = 1; i <= 10; i++) {
+        document.getElementById('n' + i).value = "";
+      }
+      document.getElementById("actualCorrect").value = "";
+      showMessage('dataMsg', '✅ Input fields have been cleared.', 'success');
+    }
+
+    // Export data in JSON or Excel format
+    function exportData(format) {
+      const data = getTrainingData();
+      if (data.length === 0) {
+        showMessage('dataMsg', '❗ No training data to export.', 'error');
+        return;
+      }
+
+      if (format === 'json') {
+        const dataStr = JSON.stringify(data);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'number-predictor-data.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showMessage('dataMsg', '✅ Training data exported as JSON.', 'success');
+      } 
+      else if (format === 'excel') {
+        // Prepare Excel data
+        const excelData = [
+          ['Sequence (Positions 1-10)', 'Correct Number (Position 11)'],
+          ...data.map(item => [
+            item.inputs.join(', '),
+            item.correctOutput
+          ])
+        ];
+
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(excelData);
+        XLSX.utils.book_append_sheet(wb, ws, "Training Data");
+
+        // Export Excel file
+        XLSX.writeFile(wb, 'number-predictor-training-data.xlsx');
+        showMessage('dataMsg', '✅ Training data exported as Excel.', 'success');
+      }
+    }
+
+    // Import training data
+    function importData() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,.xlsx,.xls';
+      input.onchange = e => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        
+        reader.onload = event => {
+          try {
+            let data;
+            if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+              // Parse Excel file
+              const workbook = XLSX.read(event.target.result);
+              const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+              data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+              
+              // Skip header row and map to our format
+              data = data.slice(1).map(row => ({
+                inputs: row[0].split(',').map(Number),
+                correctOutput: Number(row[1])
+              }));
+            } else {
+              // Parse JSON file
+              data = JSON.parse(event.target.result);
+            }
+            
+            localStorage.setItem('trainingData', JSON.stringify(data));
+            showMessage('dataMsg', `✅ Successfully imported ${data.length} training examples.`, 'success');
+          } catch (err) {
+            showMessage('dataMsg', '❗ Error importing data. Invalid file format.', 'error');
+            console.error(err);
+          }
+        };
+        
+        if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+          reader.readAsArrayBuffer(file);
+        } else {
+          reader.readAsText(file);
+        }
+      };
+      input.click();
+    }
+
+    // Show message with styling
+    function showMessage(elementId, message, type = '') {
+      const element = document.getElementById(elementId);
+      element.textContent = message;
+      element.className = 'message';
+      if (type) element.classList.add(type);
+      
+      if (type === 'error' || type === 'success') {
+        setTimeout(() => {
+          element.textContent = '';
+          element.className = 'message';
+        }, 3000);
+      }
+    }
+  </script>
+</body>
+</html>
